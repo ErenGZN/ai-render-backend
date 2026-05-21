@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from PIL import Image
+from PIL import Image, ImageOps
 import requests
 from io import BytesIO
 import uuid
@@ -18,17 +18,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Output klasörü
+# OUTPUT
 OUTPUT_DIR = "outputs"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# Static serve (üretilen görselleri URL ile açmak için)
 app.mount("/static", StaticFiles(directory=OUTPUT_DIR), name="static")
 
 
-# ---------------------------
-# IMAGE LOAD SAFE FUNCTION
-# ---------------------------
+# -----------------------------
+# IMAGE LOADER SAFE
+# -----------------------------
 def load_image(url):
     try:
         if not url:
@@ -39,77 +38,103 @@ def load_image(url):
         return None
 
 
-# ---------------------------
+# -----------------------------
+# CATEGORY BASE POSITION
+# -----------------------------
+def get_position(category, base_w, base_h, index):
+
+    if category == "koltuk":
+        return int(base_w * 0.15) + (index * 30), int(base_h * 0.55)
+
+    if category == "masa":
+        return int(base_w * 0.45), int(base_h * 0.50)
+
+    if category == "aksesuar":
+        return int(base_w * 0.70) + (index * 20), int(base_h * 0.60)
+
+    return 100 + index * 120, int(base_h * 0.6)
+
+
+# -----------------------------
 # HOME
-# ---------------------------
+# -----------------------------
 @app.get("/")
 def home():
-    return {"status": "AI Render Engine V3 Active"}
+    return {"status": "AI Render V3 Ready"}
 
 
-# ---------------------------
-# RENDER ENGINE
-# ---------------------------
+# -----------------------------
+# MAIN RENDER ENGINE
+# -----------------------------
 @app.post("/render")
 async def render(request: Request):
 
     data = await request.json()
 
+    mode = data.get("mode", "2")
     room_url = data.get("roomImage")
     products = data.get("products", "")
 
-    # BACKGROUND
+    # -------------------------
+    # ROOM IMAGE (ZORUNLU MODE 2)
+    # -------------------------
     base = load_image(room_url)
 
     if base is None:
-        base = Image.new("RGBA", (1200, 800), (235, 235, 235))
+        base = Image.new("RGBA", (1400, 900), (235, 235, 235))
 
-    base = base.resize((1200, 800))
+    base = base.resize((1400, 900))
+    base_w, base_h = base.size
 
-    # PRODUCT LIST
+    # -------------------------
+    # PRODUCT PARSE
+    # -------------------------
     product_list = []
     if products:
         product_list = [p.strip() for p in products.split(",") if p.strip()]
 
-    # SIMPLE LAYOUT ENGINE
-    x = 80
-    y = int(base.size[1] * 0.55)
+    # -------------------------
+    # PLACE PRODUCTS
+    # -------------------------
+    for i, item in enumerate(product_list):
 
-    max_per_row = 4
-    count = 0
+        try:
+            parts = item.split("|")
 
-    for url in product_list:
+            url = parts[0]
+            category = parts[1] if len(parts) > 1 else "genel"
+            count = int(parts[2]) if len(parts) > 2 else 1
 
-        img = load_image(url)
+            for c in range(count):
 
-        if img is None:
+                img = load_image(url)
+
+                if img is None:
+                    continue
+
+                # SCALE
+                scale = 0.25
+                img = ImageOps.contain(img, (int(400 * scale), int(400 * scale)))
+
+                x, y = get_position(category, base_w, base_h, c)
+
+                base.paste(img, (x, y), img)
+
+        except:
             continue
 
-        # SCALE (dinamik)
-        scale = 0.25
-        w, h = img.size
-        img = img.resize((int(w * scale), int(h * scale)))
-
-        base.paste(img, (x, y), img)
-
-        x += img.size[0] + 20
-        count += 1
-
-        if count % max_per_row == 0:
-            x = 80
-            y += 220
-
-    # SAVE IMAGE
+    # -------------------------
+    # SAVE OUTPUT
+    # -------------------------
     filename = f"{uuid.uuid4().hex}.png"
     file_path = os.path.join(OUTPUT_DIR, filename)
 
     base.save(file_path)
 
-    # PUBLIC URL
     image_url = f"https://ai-render-backend.onrender.com/static/{filename}"
 
     return {
         "status": "success",
-        "image_url": image_url,
-        "product_count": len(product_list)
+        "mode": mode,
+        "image_url": image_url
     }
