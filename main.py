@@ -4,6 +4,10 @@ import os
 
 app = FastAPI()
 
+@app.get("/")
+def home():
+    return {"message": "API aktif"}
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
