@@ -1,12 +1,15 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from PIL import Image
 import requests
 from io import BytesIO
-import base64
+import uuid
+import os
 
 app = FastAPI()
 
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -15,6 +18,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Output klasörü
+OUTPUT_DIR = "outputs"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+# Static serve (üretilen görselleri URL ile açmak için)
+app.mount("/static", StaticFiles(directory=OUTPUT_DIR), name="static")
+
+
+# ---------------------------
+# IMAGE LOAD SAFE FUNCTION
+# ---------------------------
 def load_image(url):
     try:
         if not url:
@@ -24,14 +38,18 @@ def load_image(url):
     except:
         return None
 
-def resize(img, scale):
-    w, h = img.size
-    return img.resize((int(w * scale), int(h * scale)))
 
+# ---------------------------
+# HOME
+# ---------------------------
 @app.get("/")
 def home():
-    return {"status": "ok"}
+    return {"status": "AI Render Engine V3 Active"}
 
+
+# ---------------------------
+# RENDER ENGINE
+# ---------------------------
 @app.post("/render")
 async def render(request: Request):
 
@@ -40,41 +58,58 @@ async def render(request: Request):
     room_url = data.get("roomImage")
     products = data.get("products", "")
 
-    # fallback background
+    # BACKGROUND
     base = load_image(room_url)
 
     if base is None:
-        base = Image.new("RGBA", (1200, 800), (240, 240, 240))
+        base = Image.new("RGBA", (1200, 800), (235, 235, 235))
 
-    base_w, base_h = base.size
+    base = base.resize((1200, 800))
 
+    # PRODUCT LIST
     product_list = []
     if products:
         product_list = [p.strip() for p in products.split(",") if p.strip()]
 
-    x = 50
-    y = int(base_h * 0.6)
+    # SIMPLE LAYOUT ENGINE
+    x = 80
+    y = int(base.size[1] * 0.55)
 
-    for i, url in enumerate(product_list):
+    max_per_row = 4
+    count = 0
+
+    for url in product_list:
 
         img = load_image(url)
 
         if img is None:
             continue
 
-        scale = max(0.2 - (i * 0.03), 0.1)
-        img = resize(img, scale)
+        # SCALE (dinamik)
+        scale = 0.25
+        w, h = img.size
+        img = img.resize((int(w * scale), int(h * scale)))
 
         base.paste(img, (x, y), img)
 
         x += img.size[0] + 20
+        count += 1
 
-    buffer = BytesIO()
-    base.save(buffer, format="PNG")
+        if count % max_per_row == 0:
+            x = 80
+            y += 220
 
-    encoded = base64.b64encode(buffer.getvalue()).decode()
+    # SAVE IMAGE
+    filename = f"{uuid.uuid4().hex}.png"
+    file_path = os.path.join(OUTPUT_DIR, filename)
+
+    base.save(file_path)
+
+    # PUBLIC URL
+    image_url = f"https://ai-render-backend.onrender.com/static/{filename}"
 
     return {
         "status": "success",
-        "image_base64": encoded
+        "image_url": image_url,
+        "product_count": len(product_list)
     }
