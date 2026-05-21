@@ -1,5 +1,8 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from PIL import Image
+import requests
+from io import BytesIO
 
 app = FastAPI()
 
@@ -13,7 +16,11 @@ app.add_middleware(
 
 @app.get("/")
 def home():
-    return {"message": "Mock API aktif"}
+    return {"status": "V2 engine active"}
+
+def load_image(url):
+    response = requests.get(url)
+    return Image.open(BytesIO(response.content)).convert("RGBA")
 
 @app.post("/render")
 async def render(request: Request):
@@ -21,23 +28,15 @@ async def render(request: Request):
     data = await request.json()
 
     mode = data.get("mode")
-    style = data.get("style")
-    roomType = data.get("roomType")
-    size = data.get("size")
+    room_image_url = data.get("roomImage")
     products = data.get("products")
 
-    # MOCK IMAGE (sabit bir görsel URL)
-    fake_image_url = "https://images.unsplash.com/photo-1524758631624-e2822e304c36"
+    # MOCK: şimdilik sadece base image döndürüyoruz
+    base_url = room_image_url or "https://images.unsplash.com/photo-1524758631624-e2822e304c36"
 
     return {
-        "status": "success",
-        "mode": mode,
-        "message": "MOCK render üretildi",
-        "image_url": fake_image_url,
-        "input": {
-            "style": style,
-            "roomType": roomType,
-            "size": size,
-            "products": products
-        }
+        "status": "v2_ready",
+        "message": "Real staging engine base ready",
+        "base_image": base_url,
+        "products_received": products
     }
