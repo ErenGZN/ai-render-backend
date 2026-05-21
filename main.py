@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image
 import requests
 from io import BytesIO
+import base64
 
 app = FastAPI()
 
@@ -15,16 +16,21 @@ app.add_middleware(
 )
 
 def load_image(url):
-    r = requests.get(url)
-    return Image.open(BytesIO(r.content)).convert("RGBA")
+    try:
+        if not url:
+            return None
+        r = requests.get(url, timeout=10)
+        return Image.open(BytesIO(r.content)).convert("RGBA")
+    except:
+        return None
 
-def resize_product(img, scale):
+def resize(img, scale):
     w, h = img.size
     return img.resize((int(w * scale), int(h * scale)))
 
 @app.get("/")
 def home():
-    return {"status": "v2.2 compositing engine active"}
+    return {"status": "ok"}
 
 @app.post("/render")
 async def render(request: Request):
@@ -32,49 +38,43 @@ async def render(request: Request):
     data = await request.json()
 
     room_url = data.get("roomImage")
-    products = data.get("products", [])
+    products = data.get("products", "")
 
-    # 1. Oda görseli
+    # fallback background
     base = load_image(room_url)
+
+    if base is None:
+        base = Image.new("RGBA", (1200, 800), (240, 240, 240))
 
     base_w, base_h = base.size
 
-    # 2. ürünleri parse et (basit CSV varsayımı)
-    product_list = products.split(",")
+    product_list = []
+    if products:
+        product_list = [p.strip() for p in products.split(",") if p.strip()]
 
-    # 3. sahte yerleşim algoritması
-    x_offset = 50
-    y_offset = int(base_h * 0.6)
+    x = 50
+    y = int(base_h * 0.6)
 
-    for i, p in enumerate(product_list):
+    for i, url in enumerate(product_list):
 
-        try:
-            img = load_image(p.strip())
+        img = load_image(url)
 
-            # ölçek (ürün sayısına göre küçült)
-            scale = 0.3 - (i * 0.05)
-            if scale < 0.15:
-                scale = 0.15
-
-            img = resize_product(img, scale)
-
-            base.paste(img, (x_offset, y_offset), img)
-
-            x_offset += img.size[0] + 20
-
-        except:
+        if img is None:
             continue
 
-    # 4. output buffer
-    import base64
-    from io import BytesIO
+        scale = max(0.2 - (i * 0.03), 0.1)
+        img = resize(img, scale)
+
+        base.paste(img, (x, y), img)
+
+        x += img.size[0] + 20
 
     buffer = BytesIO()
     base.save(buffer, format="PNG")
+
     encoded = base64.b64encode(buffer.getvalue()).decode()
 
     return {
         "status": "success",
-        "message": "real composited render",
         "image_base64": encoded
     }
