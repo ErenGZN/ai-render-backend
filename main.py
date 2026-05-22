@@ -65,7 +65,11 @@ async def render(request: Request):
     interior design photography,
     ultra realistic render.
     """
-
+if not os.getenv("OPENAI_API_KEY"):
+    return {
+        "error": "OPENAI_API_KEY missing"
+    }
+    
     result = client.images.generate(
         model="gpt-image-1",
         prompt=prompt,
