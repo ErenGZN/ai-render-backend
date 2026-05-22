@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
+
 import os
 import uuid
 import base64
@@ -27,12 +28,24 @@ app.mount("/static", StaticFiles(directory=OUTPUT_DIR), name="static")
 client = OpenAI(
     api_key=os.getenv("OPENAI_API_KEY")
 )
+
 # HOME
 @app.get("/")
 def home():
-    return {"status": "AI Render Engine Ready"}
 
-# MAIN RENDER
+    return {
+        "status": "AI Render Engine Ready"
+    }
+
+# TEST
+@app.get("/test")
+def test():
+
+    return {
+        "api_key_exists": bool(os.getenv("OPENAI_API_KEY"))
+    }
+
+# RENDER
 @app.post("/render")
 async def render(request: Request):
 
@@ -40,38 +53,32 @@ async def render(request: Request):
 
         data = await request.json()
 
-        room_type = data.get("roomType", "modern office")
-        style = data.get("style", "modern")
+        room_type = data.get("roomType", "Modern Office")
+        style = data.get("style", "Modern")
         sqm = data.get("sqm", "35")
-
         products = data.get("products", "")
 
-        if not os.getenv("OPENAI_API_KEY"):
-
-            return {
-                "error": "OPENAI_API_KEY missing"
-            }
-
         prompt = f"""
-        Create a photorealistic luxury office interior.
+        Create a photorealistic luxury office interior design.
 
-        Room type:
+        Room Type:
         {room_type}
 
         Style:
         {style}
 
-        Room size:
+        Room Size:
         {sqm} square meters.
 
         Use these furniture references:
         {products}
 
-        Realistic lighting,
-        luxury materials,
-        architectural render,
-        ultra realistic,
-        interior design photography.
+        Modern office atmosphere,
+        luxury interior design,
+        realistic lighting,
+        ultra realistic architectural render,
+        premium materials,
+        interior photography.
         """
 
         result = client.images.generate(
@@ -81,8 +88,6 @@ async def render(request: Request):
         )
 
         image_base64 = result.data[0].b64_json
-
-        import base64
 
         filename = f"{uuid.uuid4().hex}.png"
 
@@ -103,30 +108,3 @@ async def render(request: Request):
         return {
             "error": str(e)
         }
-if not os.getenv("OPENAI_API_KEY"):
-    return {
-        "error": "OPENAI_API_KEY missing"
-    }
-    
-    result = client.images.generate(
-        model="gpt-image-1",
-        prompt=prompt,
-        size="1536x1024"
-    )
-
-    image_base64 = result.data[0].b64_json
-
-    import base64
-
-    filename = f"{uuid.uuid4().hex}.png"
-    file_path = os.path.join(OUTPUT_DIR, filename)
-
-    with open(file_path, "wb") as f:
-        f.write(base64.b64decode(image_base64))
-
-    image_url = f"https://ai-render-backend.onrender.com/static/{filename}"
-
-    return {
-        "status": "success",
-        "image_url": image_url
-    }
