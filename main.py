@@ -2,9 +2,9 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from openai import OpenAI
-import requests
-import uuid
 import os
+import uuid
+import base64
 
 app = FastAPI()
 
