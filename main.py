@@ -24,8 +24,9 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 app.mount("/static", StaticFiles(directory=OUTPUT_DIR), name="static")
 
 # OPENAI
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-
+client = OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY")
+)
 # HOME
 @app.get("/")
 def home():
